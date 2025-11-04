@@ -1,0 +1,278 @@
+"""
+Kiến trúc hệ thống Real-time Fraud Detection
+============================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         DATA SOURCE (HDFS)                              │
+│                 /data/input/paysim_realtime.csv                         │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      KAFKA PRODUCER                                     │
+│                    (kafka_producer.py)                                  │
+│                                                                         │
+│  • Đọc CSV từ HDFS với Spark                                           │
+│  • Convert mỗi row thành JSON                                          │
+│  • Gửi vào Kafka topic: "transactions"                                 │
+│  • Delay 1s giữa các messages (giả lập realtime)                       │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    KAFKA TOPIC: "transactions"                          │
+│                                                                         │
+│  Message format (JSON):                                                │
+│  {                                                                      │
+│    "step": 1,                                                           │
+│    "type": "TRANSFER",                                                  │
+│    "amount": 9839.64,                                                   │
+│    "nameOrig": "C1231006815",                                           │
+│    "oldbalanceOrg": 170136.0,                                           │
+│    "newbalanceOrig": 160296.36,                                         │
+│    "nameDest": "C1666544295",                                           │
+│    "oldbalanceDest": 0.0,                                               │
+│    "newbalanceDest": 0.0,                                               │
+│    "isFraud": 0,                                                        │
+│    "isFlaggedFraud": 0                                                  │
+│  }                                                                      │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    SPARK STREAMING CONSUMER                             │
+│                    (spark_consumer.py)                                  │
+│                                                                         │
+│  1. Read Stream từ Kafka topic "transactions"                          │
+│  2. Parse JSON messages                                                │
+│  3. Feature Engineering:                                               │
+│     • type_encoded (PAYMENT=0, TRANSFER=1, ...)                        │
+│     • amount_log = log(amount + 1)                                     │
+│     • errorBalanceOrig = oldbalanceOrg + amount - newbalanceOrig       │
+│     • errorBalanceDest = oldbalanceDest + amount - newbalanceDest      │
+│     • amount_over_oldbalance = amount / (oldbalanceOrg + 1)            │
+│     • hour = step % 24                                                 │
+│  4. VectorAssembler: [features] → features_raw                         │
+│  5. StandardScaler: features_raw → features (scaled)                   │
+│  6. GBTClassifier: features → prediction + probability                 │
+│  7. Apply threshold (0.50) → fraud_prediction                          │
+│  8. Write Stream vào Kafka topic "predictions"                         │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    KAFKA TOPIC: "predictions"                           │
+│                                                                         │
+│  Message format (JSON):                                                │
+│  {                                                                      │
+│    "step": 1,                                                           │
+│    "type": "TRANSFER",                                                  │
+│    "amount": 9839.64,                                                   │
+│    "nameOrig": "C1231006815",                                           │
+│    "nameDest": "C1666544295",                                           │
+│    "oldbalanceOrg": 170136.0,                                           │
+│    "newbalanceOrig": 160296.36,                                         │
+│    "oldbalanceDest": 0.0,                                               │
+│    "newbalanceDest": 0.0,                                               │
+│    "isFraud": 0,                  ← Ground truth                        │
+│    "fraud_prediction": 0,         ← ML prediction                       │
+│    "fraud_probability": 0.123,    ← Fraud probability                   │
+│    "prediction_time": "2025-11-04T10:30:15"                             │
+│  }                                                                      │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    PLOTLY DASH DASHBOARD                                │
+│                      (dashboard.py)                                     │
+│                                                                         │
+│  Background Thread:                                                    │
+│    • KafkaConsumer subscribe "predictions"                             │
+│    • Parse messages và lưu vào data_store (deque)                      │
+│    • Update metrics realtime                                           │
+│                                                                         │
+│  Dashboard Components:                                                 │
+│    ┌──────────────────────────────────────────────────────────┐        │
+│    │  METRICS CARDS                                           │        │
+│    │  [Total Txns] [Fraud Count] [Fraud %] [Total Amount]    │        │
+│    └──────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│    ┌──────────────────────┬──────────────────────┐                     │
+│    │ Transaction Timeline │ Fraud Distribution   │                     │
+│    │ (Scatter plot)       │ (Bar chart)          │                     │
+│    └──────────────────────┴──────────────────────┘                     │
+│                                                                         │
+│    ┌──────────────────────┬──────────────────────┐                     │
+│    │ Amount Distribution  │ Confusion Matrix     │                     │
+│    │ (Box plot)           │ (Heatmap)            │                     │
+│    └──────────────────────┴──────────────────────┘                     │
+│                                                                         │
+│    ┌──────────────────────────────────────────────────────────┐        │
+│    │ RECENT TRANSACTIONS TABLE                                │        │
+│    │ Time | Type | Amount | From | To | Pred | Prob          │        │
+│    │ (Highlight red cho fraud alerts)                         │        │
+│    └──────────────────────────────────────────────────────────┘        │
+│                                                                         │
+│  Auto-refresh: 1 giây                                                  │
+│  URL: http://localhost:8050                                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+ML MODEL PIPELINE
+=================
+
+Training (train.ipynb):
+  Data (Parquet) 
+    → VectorAssembler 
+    → StandardScaler 
+    → GBTClassifier (weighted)
+    → Save models:
+        - gbt_fraud_model/
+        - spark_scaler_model/
+
+Inference (spark_consumer.py):
+  Raw Data 
+    → Feature Engineering
+    → VectorAssembler 
+    → StandardScaler (loaded model)
+    → GBTClassifier (loaded model)
+    → Prediction
+
+
+TECH STACK
+==========
+
+Infrastructure:
+  • Docker + Docker Compose
+  • HDFS (Hadoop 3.3)
+  • Kafka + Zookeeper
+  • Spark 3.3.0 (Master + Worker)
+
+Data Processing:
+  • PySpark (Spark SQL + Streaming)
+  • Spark MLlib (GBTClassifier)
+
+Streaming:
+  • Kafka Producer (kafka-python)
+  • Kafka Consumer (kafka-python)
+  • Spark Structured Streaming
+
+Visualization:
+  • Plotly Dash
+  • Plotly Express
+
+
+DATA FLOW TIMELINE
+==================
+
+t=0s    Producer đọc row #1 từ CSV
+t=0s    Producer gửi vào Kafka "transactions"
+t=0s    Consumer nhận message từ "transactions"
+t=0.1s  Consumer tạo features
+t=0.2s  Consumer predict với GBT model
+t=0.2s  Consumer gửi vào Kafka "predictions"
+t=0.2s  Dashboard consume từ "predictions"
+t=0.2s  Dashboard update UI (metrics + charts)
+t=1s    Producer đọc row #2 từ CSV
+...     (lặp lại)
+
+
+PERFORMANCE METRICS
+===================
+
+Throughput:
+  • Producer: ~1 msg/s (có thể tăng bằng cách giảm DELAY_SECONDS)
+  • Consumer: ~10-50 msg/s (tùy cấu hình Spark)
+  • Dashboard: Update mỗi 1s
+
+Latency:
+  • Producer → Kafka: <10ms
+  • Kafka → Consumer → Predict: ~100-300ms
+  • Consumer → Kafka → Dashboard: <50ms
+  • End-to-end: ~200-500ms
+
+Model Performance (từ training):
+  • ROC-AUC: ~0.96+
+  • PR-AUC: ~0.75+
+  • Best F1-Score: ~0.70+
+  • Threshold: 0.50
+
+
+FILES STRUCTURE
+===============
+
+kafka_producer.py           # Producer: CSV → Kafka
+spark_consumer.py           # Consumer: Kafka → ML → Kafka
+dashboard.py                # Dashboard: Kafka → Visualize
+check_models.py            # Utility: Check models
+run_system.sh              # Script: Chạy từng component
+start_all.sh               # Script: Chạy tất cả (tmux)
+kafka_monitor.sh           # Script: Monitor Kafka topics
+requirements_dashboard.txt  # Dependencies cho dashboard
+README_REALTIME_SYSTEM.md  # Documentation đầy đủ
+QUICKSTART.md              # Hướng dẫn nhanh
+ARCHITECTURE.txt           # File này
+
+gbt_fraud_model/           # Trained GBT model (từ train.ipynb)
+spark_scaler_model/        # Trained Scaler (từ train.ipynb)
+
+
+CONFIGURATION
+=============
+
+kafka_producer.py:
+  HDFS_PATH = "hdfs://namenode:9000/data/input/paysim_realtime.csv"
+  KAFKA_BROKER = "kafka:9092"
+  KAFKA_TOPIC = "transactions"
+  DELAY_SECONDS = 1
+
+spark_consumer.py:
+  KAFKA_BROKER = "kafka:9092"
+  INPUT_TOPIC = "transactions"
+  OUTPUT_TOPIC = "predictions"
+  BEST_THRESHOLD = 0.50
+
+dashboard.py:
+  KAFKA_BROKER = "kafka:9092"
+  KAFKA_TOPIC = "predictions"
+  MAX_POINTS = 100
+  UPDATE_INTERVAL = 1000 (ms)
+
+
+MONITORING & DEBUGGING
+======================
+
+Logs:
+  • Producer logs: stdout (spark-submit)
+  • Consumer logs: stdout (spark-submit)
+  • Dashboard logs: stdout (python)
+
+Kafka:
+  • List topics: ./kafka_monitor.sh → option 1
+  • Monitor messages: ./kafka_monitor.sh → option 2 hoặc 3
+
+Spark UI:
+  • Master: http://localhost:8080
+  • Worker: http://localhost:8081
+  • Applications: Check running jobs, stages, tasks
+
+HDFS:
+  • NameNode UI: http://localhost:9870
+  • Browse filesystem: Utilities → Browse the file system
+
+Dashboard:
+  • URL: http://localhost:8050
+  • Browser console: F12 để debug
+
+
+TROUBLESHOOTING CHECKLIST
+==========================
+
+□ Docker containers running? (docker ps)
+□ Kafka topics created? (./kafka_monitor.sh)
+□ Models trained? (python check_models.py)
+□ CSV uploaded to HDFS? (hdfs dfs -ls /data/input/)
+□ Producer sending messages? (check logs)
+□ Consumer processing? (check Spark UI)
+□ Dashboard receiving data? (check browser console)
+"""
