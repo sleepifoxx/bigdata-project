@@ -31,15 +31,6 @@ services:
     ports:
       - "6379:6379"
 
-  # ================== API ==================
-  api:
-    build: ./fast_api
-    ports:
-      - "8000:8000"
-    depends_on:
-      - kafka
-      - redis
-
   # ================== Hadoop Cluster ==================
   namenode:
     build: ./namenode
