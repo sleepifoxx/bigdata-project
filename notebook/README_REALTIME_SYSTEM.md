@@ -64,13 +64,11 @@ spark-submit \
 **Chức năng:**
 - Đọc CSV từ HDFS (`/data/input/paysim_realtime.csv`)
 - Gửi từng dòng vào Kafka topic `transactions` (giả lập realtime)
-- Delay 1 giây giữa các transactions
+- Delay 0.1 giây giữa các transactions
 
 #### **Terminal 2: Spark Consumer**
 ```bash
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0 \
-  spark_consumer.py
+python spark_consumer_batch.py
 ```
 
 **Chức năng:**
@@ -82,7 +80,7 @@ spark-submit \
 #### **Terminal 3: Dashboard**
 ```bash
 # Install dependencies
-pip install -r requirements_dashboard.txt
+pip install -r requirements.txt
 
 # Run dashboard
 python dashboard.py
