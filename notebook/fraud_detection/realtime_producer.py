@@ -23,7 +23,7 @@ KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
 KAFKA_TOPIC = 'fraud_transactions'
 HDFS_INPUT_PATH = 'hdfs://namenode:9000/data/input/paysim_realtime.csv'
 TRANSACTIONS_PER_SECOND = 1
-BATCH_INTERVAL = 1.0  # giây
+BATCH_INTERVAL = 10.0  # giây
 
 
 class FraudDataProducer:

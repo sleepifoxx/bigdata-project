@@ -50,16 +50,16 @@ def create_spark_session():
         .config("spark.hadoop.fs.defaultFS", "hdfs://namenode:9000") \
         .getOrCreate()
     
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("ERROR")
     logger.info("Spark Session created successfully")
     return spark
 
 
 def define_schema():
     """Define schema cho dữ liệu giao dịch"""
-    # Schema cho dữ liệu gốc (có thể điều chỉnh theo CSV)
+    # Schema cho dữ liệu gốc (fixed to match producer output)
     data_schema = StructType([
-        StructField("step", IntegerType(), True),
+        StructField("step", DoubleType(), True),  # Fixed: was IntegerType
         StructField("type", StringType(), True),
         StructField("amount", DoubleType(), True),
         StructField("nameOrig", StringType(), True),
@@ -68,13 +68,13 @@ def define_schema():
         StructField("nameDest", StringType(), True),
         StructField("oldbalanceDest", DoubleType(), True),
         StructField("newbalanceDest", DoubleType(), True),
-        StructField("isFraud", IntegerType(), True),
-        StructField("isFlaggedFraud", IntegerType(), True)
+        StructField("isFraud", DoubleType(), True),  # Fixed: was IntegerType
+        StructField("isFlaggedFraud", DoubleType(), True)  # Fixed: was IntegerType
     ])
     
     # Schema cho message từ Kafka
     message_schema = StructType([
-        StructField("transaction_id", LongType(), True),
+        StructField("transaction_id", IntegerType(), True),  # Fixed: was LongType
         StructField("timestamp", DoubleType(), True),
         StructField("data", data_schema, True)
     ])
@@ -90,37 +90,37 @@ def preprocess_features(df):
     # 1. Mã hóa type
     df = df.withColumn(
         "type_encoded",
-        when(col("data.type") == "CASH_OUT", 0).otherwise(1)
+        when(col("type") == "CASH_OUT", 0).otherwise(1)
     )
     
     # 2. Error Balance Origin
     df = df.withColumn(
         "errorBalanceOrig",
-        col("data.oldbalanceOrg") - col("data.newbalanceOrig") - col("data.amount")
+        col("oldbalanceOrg") - col("newbalanceOrig") - col("amount")
     )
     
     # 3. Error Balance Destination
     df = df.withColumn(
         "errorBalanceDest",
-        col("data.oldbalanceDest") + col("data.amount") - col("data.newbalanceDest")
+        col("oldbalanceDest") + col("amount") - col("newbalanceDest")
     )
     
     # 4. Amount over old balance
     df = df.withColumn(
         "amount_over_oldbalance",
-        col("data.amount") / (col("data.oldbalanceOrg") + eps)
+        col("amount") / (col("oldbalanceOrg") + eps)
     )
     
     # 5. Hour
     df = df.withColumn(
         "hour",
-        (col("data.step") % 24).cast("int")
+        (col("step") % 24).cast("int")
     )
     
     # 6. Log amount
     df = df.withColumn(
         "amount_log",
-        log1p(col("data.amount"))
+        log1p(col("amount"))
     )
     
     return df
@@ -177,18 +177,30 @@ def main():
     
     logger.info("✅ Connected to Kafka")
     
-    # Parse JSON
+    # Parse JSON - matching simple_consumer structure
     parsed_df = kafka_df.select(
+        col("key").cast("string").alias("tx_key"),
         from_json(col("value").cast("string"), schema).alias("json_data")
     ).select(
+        col("tx_key"),
         col("json_data.transaction_id").alias("tx_id"),
         col("json_data.timestamp").alias("timestamp"),
-        col("json_data.data").alias("data")
+        col("json_data.data.step").cast("double").alias("step"),
+        col("json_data.data.type").alias("type"),
+        col("json_data.data.amount").cast("double").alias("amount"),
+        col("json_data.data.nameOrig").alias("nameOrig"),
+        col("json_data.data.oldbalanceOrg").cast("double").alias("oldbalanceOrg"),
+        col("json_data.data.newbalanceOrig").cast("double").alias("newbalanceOrig"),
+        col("json_data.data.nameDest").alias("nameDest"),
+        col("json_data.data.oldbalanceDest").cast("double").alias("oldbalanceDest"),
+        col("json_data.data.newbalanceDest").cast("double").alias("newbalanceDest"),
+        col("json_data.data.isFraud").cast("double").alias("isFraud"),
+        col("json_data.data.isFlaggedFraud").cast("double").alias("isFlaggedFraud")
     )
     
     # Lọc chỉ lấy TRANSFER và CASH_OUT
     filtered_df = parsed_df.filter(
-        (col("data.type") == "TRANSFER") | (col("data.type") == "CASH_OUT")
+        (col("type") == "TRANSFER") | (col("type") == "CASH_OUT")
     )
     
     # Tạo features
@@ -218,7 +230,7 @@ def main():
                    extract_prob_udf(col("probability"))) \
         .withColumn("predicted_fraud",
                    when(col("fraud_probability") >= FRAUD_THRESHOLD, 1).otherwise(0)) \
-        .withColumn("actual_fraud", col("data.isFraud"))
+        .withColumn("actual_fraud", col("isFraud"))
     
     # Convert timestamp để sử dụng với watermark
     predictions_with_timestamp = predictions_final.withColumn(
@@ -230,10 +242,10 @@ def main():
     output_df = predictions_with_timestamp.select(
         col("tx_id"),
         col("event_time").alias("transaction_time"),
-        col("data.type").alias("tx_type"),
-        round(col("data.amount"), 2).alias("amount"),
-        col("data.nameOrig").alias("from_account"),
-        col("data.nameDest").alias("to_account"),
+        col("type").alias("tx_type"),
+        round(col("amount"), 2).alias("amount"),
+        col("nameOrig").alias("from_account"),
+        col("nameDest").alias("to_account"),
         col("actual_fraud"),
         col("predicted_fraud"),
         round(col("fraud_probability") * 100, 2).alias("fraud_prob_pct")
@@ -268,81 +280,183 @@ def main():
     
     # Output 1: All transactions with predictions - Write to Redis
     def write_fraud_to_redis(batch_df, batch_id):
-        """Write fraud predictions to Redis"""
-        try:
-            sys.path.insert(0, '/home/jovyan/work/redis')
-            from redis_sink import write_to_redis_fraud
-            batch_df.foreachPartition(write_to_redis_fraud)
-            logger.info(f"Batch {batch_id}: Written {batch_df.count()} fraud predictions to Redis")
-        except Exception as e:
-            logger.error(f"Error writing fraud to Redis: {e}")
+        """Embedded function to write fraud predictions to Redis"""
+        import redis
+        import json
+        import time
+        
+        # Redis connection in worker process
+        redis_client = redis.Redis(
+            host='redis',
+            port=6379,
+            db=0,
+            decode_responses=True
+        )
+        
+        # Process each row in the batch
+        for row in batch_df.collect():
+            try:
+                # Convert row to dictionary for safe access
+                row_dict = row.asDict() if hasattr(row, 'asDict') else {}
+                
+                # Skip invalid rows
+                if not row_dict.get('tx_id'):
+                    pass  # Skip invalid row silently
+                    continue
+                
+                # Prepare transaction data with safe null checks
+                # Convert datetime to string if needed
+                transaction_time = row_dict.get('transaction_time', '')
+                if hasattr(transaction_time, 'strftime'):
+                    transaction_time = transaction_time.strftime('%Y-%m-%d %H:%M:%S')
+                elif transaction_time is None:
+                    transaction_time = ''
+                else:
+                    transaction_time = str(transaction_time)
+                
+                tx_data = {
+                    'tx_id': int(row_dict.get('tx_id', 0)) if row_dict.get('tx_id') is not None else 0,
+                    'transaction_time': transaction_time,
+                    'tx_type': row_dict.get('tx_type', ''),
+                    'amount': float(row_dict.get('amount', 0)) if row_dict.get('amount') is not None else 0.0,
+                    'from_account': row_dict.get('from_account', ''),
+                    'to_account': row_dict.get('to_account', ''),
+                    'actual_fraud': int(row_dict.get('actual_fraud', 0)) if row_dict.get('actual_fraud') is not None else 0,
+                    'predicted_fraud': int(row_dict.get('predicted_fraud', 0)) if row_dict.get('predicted_fraud') is not None else 0,
+                    'fraud_prob_pct': float(row_dict.get('fraud_prob_pct', 0)) if row_dict.get('fraud_prob_pct') is not None else 0.0,
+                    'timestamp': int(time.time() * 1000)
+                }
+                
+                # Save transaction with timestamped key
+                ts = int(time.time() * 1000)
+                tx_key = f"fraud:transaction:{tx_data['tx_id']}:{ts}"
+                redis_client.setex(tx_key, 86400, json.dumps(tx_data))  # 24h expiry
+                
+                # Add to recent transactions
+                redis_client.zadd('fraud:transactions:recent', {tx_key: ts})
+                redis_client.zremrangebyrank('fraud:transactions:recent', 0, -201)  # Keep 200
+                
+                # If fraud detected, create alert
+                if tx_data['predicted_fraud'] == 1:
+                    alert_key = f"fraud:alert:{tx_data['tx_id']}:{ts}"
+                    alert = {
+                        'tx_id': tx_data['tx_id'],
+                        'tx_type': tx_data['tx_type'],
+                        'amount': tx_data['amount'],
+                        'from_account': tx_data['from_account'],
+                        'to_account': tx_data['to_account'],
+                        'fraud_prob_pct': tx_data['fraud_prob_pct'],
+                        'transaction_time': tx_data['transaction_time'],
+                        'timestamp': tx_data['timestamp']
+                    }
+                    redis_client.setex(alert_key, 86400, json.dumps(alert))
+                    redis_client.zadd('fraud:alerts:recent', {alert_key: ts})
+                    redis_client.zremrangebyrank('fraud:alerts:recent', 0, -101)  # Keep 100
+                    
+                    # Increment counters
+                    redis_client.incr('fraud:counter:total')
+                    redis_client.incr(f'fraud:counter:type:{tx_data["tx_type"]}')
+                
+                print(f"✓ Redis TX: {tx_data['tx_id']} | {tx_data['tx_type']} | ${tx_data['amount']:.2f} | Fraud: {tx_data['predicted_fraud']} ({tx_data['fraud_prob_pct']:.1f}%)")
+                
+            except Exception as e:
+                import traceback
+                print(f"Redis Write Error: {str(e)}")
+                print(f"Full traceback: {traceback.format_exc()}")
+                continue
+        
+        print(f"📦 Batch {batch_id}: Processed {len(batch_df.collect())} transactions to Redis")
+        logger.info(f"Batch {batch_id}: Processed fraud predictions to Redis")
     
     # Stream to Redis
     redis_query = output_df \
         .writeStream \
         .foreachBatch(write_fraud_to_redis) \
-        .trigger(processingTime="5 seconds") \
+        .trigger(processingTime="10 seconds") \
         .start()
     
     logger.info("✅ Fraud predictions Redis stream started")
     
-    # Console output (for monitoring)
-    query1 = output_df \
-        .writeStream \
-        .outputMode("append") \
-        .format("console") \
-        .option("truncate", False) \
-        .option("numRows", 5) \
-        .trigger(processingTime="5 seconds") \
-        .start()
-    
-    logger.info("✅ Transaction predictions console stream started")
-    
-    # Output 2: Fraud alerts only
-    fraud_alerts = output_df.filter(col("predicted_fraud") == 1)
-    
-    query2 = fraud_alerts \
-        .writeStream \
-        .outputMode("append") \
-        .format("console") \
-        .option("truncate", False) \
-        .queryName("FRAUD_ALERTS") \
-        .trigger(processingTime="5 seconds") \
-        .start()
-    
-    logger.info("✅ Fraud alerts stream started")
-    
     # Output 3: Performance metrics - Write to Redis
     def write_fraud_stats_to_redis(batch_df, batch_id):
-        """Write fraud statistics to Redis"""
-        try:
-            sys.path.insert(0, '/home/jovyan/work/redis')
-            from redis_sink import write_fraud_statistics
-            batch_df.foreachPartition(write_fraud_statistics)
-        except Exception as e:
-            logger.error(f"Error writing fraud stats to Redis: {e}")
+        """Embedded function to write fraud statistics to Redis"""
+        import redis
+        import json
+        import time
+        
+        # Redis connection in worker process
+        redis_client = redis.Redis(
+            host='redis',
+            port=6379,
+            db=0,
+            decode_responses=True
+        )
+        
+        # Process each row in the batch
+        for row in batch_df.collect():
+            try:
+                # Convert row to dictionary for safe access
+                row_dict = row.asDict() if hasattr(row, 'asDict') else {}
+                
+                # Convert datetime fields to strings if needed
+                window_start = row_dict.get('window_start', '')
+                if hasattr(window_start, 'strftime'):
+                    window_start = window_start.strftime('%Y-%m-%d %H:%M:%S')
+                elif window_start is None:
+                    window_start = ''
+                else:
+                    window_start = str(window_start)
+                    
+                window_end = row_dict.get('window_end', '')
+                if hasattr(window_end, 'strftime'):
+                    window_end = window_end.strftime('%Y-%m-%d %H:%M:%S')
+                elif window_end is None:
+                    window_end = ''
+                else:
+                    window_end = str(window_end)
+                
+                # Prepare statistics data with safe null checks
+                stats = {
+                    'window_start': window_start,
+                    'window_end': window_end,
+                    'total_transactions': int(row_dict.get('total_transactions', 0)) if row_dict.get('total_transactions') is not None else 0,
+                    'actual_frauds': int(row_dict.get('actual_frauds', 0)) if row_dict.get('actual_frauds') is not None else 0,
+                    'predicted_frauds': int(row_dict.get('predicted_frauds', 0)) if row_dict.get('predicted_frauds') is not None else 0,
+                    'accuracy_pct': float(row_dict.get('accuracy_pct', 0)) if row_dict.get('accuracy_pct') is not None else 0.0,
+                    'true_positives': int(row_dict.get('true_positives', 0)) if row_dict.get('true_positives') is not None else 0,
+                    'false_positives': int(row_dict.get('false_positives', 0)) if row_dict.get('false_positives') is not None else 0,
+                    'false_negatives': int(row_dict.get('false_negatives', 0)) if row_dict.get('false_negatives') is not None else 0,
+                    'avg_fraud_prob_pct': float(row_dict.get('avg_fraud_prob_pct', 0)) if row_dict.get('avg_fraud_prob_pct') is not None else 0.0,
+                    'timestamp': int(time.time() * 1000)
+                }
+                
+                # Save overall stats
+                redis_client.setex('fraud:statistics', 300, json.dumps(stats))  # 5 min expiry
+                
+                # Save timestamped stats
+                ts = int(time.time() * 1000)
+                stats_key = f"fraud:stats:{ts}"
+                redis_client.setex(stats_key, 3600, json.dumps(stats))  # 1h expiry
+                
+                print(f"✓ Redis Stats: Total: {stats['total_transactions']}, Frauds: {stats['predicted_frauds']}, Accuracy: {stats['accuracy_pct']:.1f}%")
+                
+            except Exception as e:
+                import traceback
+                print(f"Redis Stats Error: {str(e)}")
+                print(f"Full traceback: {traceback.format_exc()}")
+                continue
+        
+        print(f"📊 Batch {batch_id}: Processed fraud statistics to Redis")
+        logger.info(f"Batch {batch_id}: Processed fraud statistics to Redis")
     
     stats_redis_query = accuracy_df \
         .writeStream \
         .outputMode("update") \
         .foreachBatch(write_fraud_stats_to_redis) \
-        .trigger(processingTime="30 seconds") \
+        .trigger(processingTime="10 seconds") \
         .start()
     
     logger.info("✅ Fraud stats Redis stream started")
-    
-    # Console output for metrics
-    query3 = accuracy_df \
-        .writeStream \
-        .outputMode("update") \
-        .format("console") \
-        .option("truncate", False) \
-        .option("numRows", 5) \
-        .queryName("PERFORMANCE_METRICS") \
-        .trigger(processingTime="30 seconds") \
-        .start()
-    
-    logger.info("✅ Performance metrics console stream started")
     logger.info("="*80)
     logger.info(f"Fraud threshold: {FRAUD_THRESHOLD}")
     logger.info("Streaming queries are running. Press Ctrl+C to stop.")
@@ -354,10 +468,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("\n⚠️  Stopping streaming queries...")
         redis_query.stop()
-        query1.stop()
-        query2.stop()
         stats_redis_query.stop()
-        query3.stop()
         logger.info("All queries stopped")
     finally:
         spark.stop()

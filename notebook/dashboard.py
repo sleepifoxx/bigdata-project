@@ -27,6 +27,15 @@ redis_client = redis.Redis(
     decode_responses=True
 )
 
+# Test Redis connection
+def test_redis_connection():
+    try:
+        redis_client.ping()
+        return True
+    except Exception as e:
+        print(f"Redis connection error: {e}")
+        return False
+
 # Initialize Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Real-time Market & Fraud Dashboard"
@@ -145,7 +154,7 @@ app.layout = html.Div([
         # Auto-refresh interval
         dcc.Interval(
             id='interval-component',
-            interval=5*1000,  # 5 seconds
+            interval=10*1000,  # 10 seconds
             n_intervals=0
         ),
         
@@ -400,13 +409,27 @@ def get_market_risk_alerts_from_redis():
 def get_transactions_from_redis():
     """Lấy giao dịch gần nhất từ Redis"""
     try:
-        keys = redis_client.keys('fraud:transaction:*')
+        # Get recent transactions from sorted set
+        recent_keys = redis_client.zrevrange('fraud:transactions:recent', 0, 49)  # Latest 50
         transactions = []
         
-        for key in sorted(keys, reverse=True)[:50]:
+        for key in recent_keys:
             value = redis_client.get(key)
             if value:
-                transactions.append(json.loads(value))
+                data = json.loads(value)
+                # Add timestamp for display
+                data['redis_key'] = key
+                transactions.append(data)
+        
+        # If no sorted set data, fallback to pattern search
+        if not transactions:
+            keys = redis_client.keys('fraud:transaction:*')
+            for key in sorted(keys, reverse=True)[:20]:
+                value = redis_client.get(key)
+                if value:
+                    data = json.loads(value)
+                    data['redis_key'] = key
+                    transactions.append(data)
         
         return transactions
     except Exception as e:
@@ -417,13 +440,26 @@ def get_transactions_from_redis():
 def get_fraud_alerts_from_redis():
     """Lấy cảnh báo gian lận từ Redis"""
     try:
-        keys = redis_client.keys('fraud:alert:*')
+        # Get recent alerts from sorted set
+        alert_keys = redis_client.zrevrange('fraud:alerts:recent', 0, 29)  # Latest 30
         alerts = []
         
-        for key in sorted(keys, reverse=True)[:30]:
+        for key in alert_keys:
             value = redis_client.get(key)
             if value:
-                alerts.append(json.loads(value))
+                data = json.loads(value)
+                data['redis_key'] = key
+                alerts.append(data)
+        
+        # If no sorted set data, fallback to pattern search
+        if not alerts:
+            keys = redis_client.keys('fraud:alert:*')
+            for key in sorted(keys, reverse=True)[:15]:
+                value = redis_client.get(key)
+                if value:
+                    data = json.loads(value)
+                    data['redis_key'] = key
+                    alerts.append(data)
         
         return alerts
     except Exception as e:
@@ -657,12 +693,24 @@ def create_fraud_summary_cards(transactions, alerts):
     """Tạo summary cards cho fraud"""
     cards = []
     
+    # Redis status
+    redis_status = "🟢 Connected" if test_redis_connection() else "🔴 Disconnected"
+    cards.append(
+        html.Div([
+            html.Div("Redis Status", className='metric-label'),
+            html.Div(redis_status, className='metric-value', 
+                    style={'color': '#00cc66' if '🟢' in redis_status else '#ff4444', 'fontSize': '14px'})
+        ], className='stats-card', style={'width': '200px'})
+    )
+    
     # Total transactions
     total_tx = len(transactions)
+    fraud_tx = len([tx for tx in transactions if tx.get('predicted_fraud') == 1])
     cards.append(
         html.Div([
             html.Div("Total Transactions", className='metric-label'),
-            html.Div(f"{total_tx:,}", className='metric-value', style={'color': '#667eea'})
+            html.Div(f"{total_tx:,}", className='metric-value', style={'color': '#667eea'}),
+            html.Div(f"({fraud_tx} fraud)", className='metric-label', style={'fontSize': '10px', 'color': '#ff4444'})
         ], className='stats-card', style={'width': '200px'})
     )
     
@@ -671,26 +719,39 @@ def create_fraud_summary_cards(transactions, alerts):
     cards.append(
         html.Div([
             html.Div("Fraud Alerts", className='metric-label'),
-            html.Div(str(fraud_count), className='metric-value', style={'color': '#ff4444'})
+            html.Div(str(fraud_count), className='metric-value', style={'color': '#ff4444'}),
+            html.Div("Active alerts", className='metric-label', style={'fontSize': '10px'})
         ], className='stats-card alert-high' if fraud_count > 0 else 'stats-card',
         style={'width': '200px'})
     )
     
     # Fraud rate
-    fraud_rate = (fraud_count / total_tx * 100) if total_tx > 0 else 0
+    fraud_rate = (fraud_tx / total_tx * 100) if total_tx > 0 else 0
+    rate_color = '#ff4444' if fraud_rate > 5 else '#ffaa00' if fraud_rate > 1 else '#00cc66'
     cards.append(
         html.Div([
             html.Div("Fraud Rate", className='metric-label'),
-            html.Div(f"{fraud_rate:.2f}%", className='metric-value', style={'color': '#ffaa00'})
+            html.Div(f"{fraud_rate:.2f}%", className='metric-value', style={'color': rate_color}),
+            html.Div("Detection rate", className='metric-label', style={'fontSize': '10px'})
         ], className='stats-card', style={'width': '200px'})
     )
     
     # Total amount at risk
     total_amount = sum(alert.get('amount', 0) for alert in alerts)
+    if total_amount > 1e9:
+        amount_display = f"${total_amount/1e9:.1f}B"
+    elif total_amount > 1e6:
+        amount_display = f"${total_amount/1e6:.1f}M"
+    elif total_amount > 1e3:
+        amount_display = f"${total_amount/1e3:.1f}K"
+    else:
+        amount_display = f"${total_amount:.0f}"
+        
     cards.append(
         html.Div([
             html.Div("Amount at Risk", className='metric-label'),
-            html.Div(f"${total_amount/1e6:.1f}M", className='metric-value', style={'color': '#ff4444'})
+            html.Div(amount_display, className='metric-value', style={'color': '#ff4444'}),
+            html.Div("In fraud alerts", className='metric-label', style={'fontSize': '10px'})
         ], className='stats-card', style={'width': '200px'})
     )
     
@@ -700,7 +761,14 @@ def create_fraud_summary_cards(transactions, alerts):
 def create_fraud_timeline_chart(alerts):
     """Tạo biểu đồ timeline fraud"""
     if not alerts:
-        return go.Figure()
+        fig = go.Figure()
+        fig.update_layout(
+            title='Fraud Timeline',
+            xaxis_title='Time',
+            yaxis_title='Fraud Count',
+            template='plotly_dark'
+        )
+        return fig
     
     df = pd.DataFrame(alerts)
     df['timestamp'] = pd.to_datetime(df.get('timestamp', []))
@@ -735,28 +803,45 @@ def create_fraud_timeline_chart(alerts):
 def create_fraud_distribution_chart(alerts):
     """Tạo biểu đồ phân bố fraud"""
     if not alerts:
-        return go.Figure()
+        fig = go.Figure()
+        fig.update_layout(title='Fraud Distribution', template='plotly_dark')
+        return fig
     
     df = pd.DataFrame(alerts)
     
-    # Distribution by transaction type
-    type_dist = df.get('tx_type', pd.Series()).value_counts()
-    
-    fig = go.Figure(data=[
-        go.Pie(
-            labels=type_dist.index,
-            values=type_dist.values,
-            hole=0.4,
-            marker=dict(colors=['#ff4444', '#ff8844'])
+    try:
+        # Distribution by transaction type
+        if 'tx_type' in df.columns:
+            type_dist = df['tx_type'].value_counts()
+        else:
+            type_dist = pd.Series({'UNKNOWN': len(alerts)})
+        
+        # Create pie chart for transaction types
+        fig = go.Figure(data=[
+            go.Pie(
+                labels=type_dist.index,
+                values=type_dist.values,
+                hole=0.4,
+                marker=dict(colors=['#ff4444', '#ff8844', '#ffaa44']),
+                textinfo='label+percent+value',
+                textfont_size=12
+            )
+        ])
+        
+        fig.update_layout(
+            title='Fraud Distribution by Transaction Type',
+            template='plotly_dark',
+            showlegend=True,
+            font=dict(color='white')
         )
-    ])
-    
-    fig.update_layout(
-        title='Fraud Distribution by Transaction Type',
-        template='plotly_dark'
-    )
-    
-    return fig
+        
+        return fig
+        
+    except Exception as e:
+        print(f"Error creating distribution chart: {e}")
+        fig = go.Figure()
+        fig.update_layout(title='Fraud Distribution - Error loading data', template='plotly_dark')
+        return fig
 
 
 def create_transactions_table(transactions):
@@ -869,4 +954,4 @@ if __name__ == '__main__':
     print("Press Ctrl+C to stop")
     print("="*80)
     
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+    app.run(debug=True, host='0.0.0.0', port=8050)
