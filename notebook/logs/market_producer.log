@@ -1,0 +1,61 @@
+2025-11-15 14:03:39,122 - INFO - ============================================================
+2025-11-15 14:03:39,123 - INFO - VIETNAM STOCK MARKET DATA PRODUCER
+2025-11-15 14:03:39,123 - INFO - ============================================================
+2025-11-15 14:03:39,124 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connecting> [IPv4 ('172.18.0.9', 9092)]>: connecting to kafka:9092 [('172.18.0.9', 9092) IPv4]
+2025-11-15 14:03:39,129 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <checking_api_versions_recv> [IPv4 ('172.18.0.9', 9092)]>: Broker version identified as 2.6
+2025-11-15 14:03:39,129 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Connection complete.
+2025-11-15 14:03:39,772 - INFO - Kafka Producer initialized. Topic: vietnam_stocks
+2025-11-15 14:03:39,773 - INFO - Bắt đầu thu thập dữ liệu cho 10 mã chứng khoán
+2025-11-15 14:03:39,773 - INFO - Danh sách mã: VCB, VHM, VIC, HPG, TCB, ACB, VNM, BID, GAS, MSN
+2025-11-15 14:03:39,773 - INFO - Interval: 15s
+2025-11-15 14:03:40,002 - INFO - Đã lấy được 10 mã chứng khoán
+2025-11-15 14:03:40,006 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=kafka:9092 <connecting> [IPv4 ('172.18.0.9', 9092)]>: connecting to kafka:9092 [('172.18.0.9', 9092) IPv4]
+2025-11-15 14:03:40,007 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Connection complete.
+2025-11-15 14:03:40,007 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Closing connection. 
+2025-11-15 14:03:40,020 - INFO - Sent VCB -> Topic: vietnam_stocks, Partition: 0, Offset: 20
+2025-11-15 14:03:40,028 - INFO - Sent VHM -> Topic: vietnam_stocks, Partition: 0, Offset: 21
+2025-11-15 14:03:40,037 - INFO - Sent VIC -> Topic: vietnam_stocks, Partition: 0, Offset: 22
+2025-11-15 14:03:40,044 - INFO - Sent HPG -> Topic: vietnam_stocks, Partition: 0, Offset: 23
+2025-11-15 14:03:40,050 - INFO - Sent TCB -> Topic: vietnam_stocks, Partition: 0, Offset: 24
+2025-11-15 14:03:40,059 - INFO - Sent ACB -> Topic: vietnam_stocks, Partition: 0, Offset: 25
+2025-11-15 14:03:40,067 - INFO - Sent VNM -> Topic: vietnam_stocks, Partition: 0, Offset: 26
+2025-11-15 14:03:40,077 - INFO - Sent BID -> Topic: vietnam_stocks, Partition: 0, Offset: 27
+2025-11-15 14:03:40,084 - INFO - Sent GAS -> Topic: vietnam_stocks, Partition: 0, Offset: 28
+2025-11-15 14:03:40,095 - INFO - Sent MSN -> Topic: vietnam_stocks, Partition: 0, Offset: 29
+2025-11-15 14:03:40,095 - INFO - Chờ 14.68s trước khi lấy dữ liệu tiếp...
+2025-11-15 14:03:55,209 - INFO - Đã lấy được 10 mã chứng khoán
+2025-11-15 14:03:55,339 - INFO - Sent VCB -> Topic: vietnam_stocks, Partition: 0, Offset: 30
+2025-11-15 14:03:55,463 - INFO - Sent VHM -> Topic: vietnam_stocks, Partition: 0, Offset: 31
+2025-11-15 14:03:55,560 - INFO - Sent VIC -> Topic: vietnam_stocks, Partition: 0, Offset: 32
+2025-11-15 14:03:55,594 - INFO - Sent HPG -> Topic: vietnam_stocks, Partition: 0, Offset: 33
+2025-11-15 14:03:55,639 - INFO - Sent TCB -> Topic: vietnam_stocks, Partition: 0, Offset: 34
+2025-11-15 14:03:55,664 - INFO - Sent ACB -> Topic: vietnam_stocks, Partition: 0, Offset: 35
+2025-11-15 14:03:55,741 - INFO - Sent VNM -> Topic: vietnam_stocks, Partition: 0, Offset: 36
+2025-11-15 14:03:55,832 - INFO - Sent BID -> Topic: vietnam_stocks, Partition: 0, Offset: 37
+2025-11-15 14:03:55,873 - INFO - Sent GAS -> Topic: vietnam_stocks, Partition: 0, Offset: 38
+2025-11-15 14:03:55,893 - INFO - Sent MSN -> Topic: vietnam_stocks, Partition: 0, Offset: 39
+2025-11-15 14:03:55,897 - INFO - Chờ 13.89s trước khi lấy dữ liệu tiếp...
+2025-11-15 14:04:09,949 - INFO - Đã lấy được 10 mã chứng khoán
+2025-11-15 14:04:09,954 - INFO - Sent VCB -> Topic: vietnam_stocks, Partition: 0, Offset: 40
+2025-11-15 14:04:09,958 - INFO - Sent VHM -> Topic: vietnam_stocks, Partition: 0, Offset: 41
+2025-11-15 14:04:09,962 - INFO - Sent VIC -> Topic: vietnam_stocks, Partition: 0, Offset: 42
+2025-11-15 14:04:09,966 - INFO - Sent HPG -> Topic: vietnam_stocks, Partition: 0, Offset: 43
+2025-11-15 14:04:09,969 - INFO - Sent TCB -> Topic: vietnam_stocks, Partition: 0, Offset: 44
+2025-11-15 14:04:09,973 - INFO - Sent ACB -> Topic: vietnam_stocks, Partition: 0, Offset: 45
+2025-11-15 14:04:09,977 - INFO - Sent VNM -> Topic: vietnam_stocks, Partition: 0, Offset: 46
+2025-11-15 14:04:09,981 - INFO - Sent BID -> Topic: vietnam_stocks, Partition: 0, Offset: 47
+2025-11-15 14:04:09,985 - INFO - Sent GAS -> Topic: vietnam_stocks, Partition: 0, Offset: 48
+2025-11-15 14:04:09,988 - INFO - Sent MSN -> Topic: vietnam_stocks, Partition: 0, Offset: 49
+2025-11-15 14:04:09,988 - INFO - Chờ 14.80s trước khi lấy dữ liệu tiếp...
+2025-11-15 14:04:24,971 - INFO - Đã lấy được 10 mã chứng khoán
+2025-11-15 14:04:24,976 - INFO - Sent VCB -> Topic: vietnam_stocks, Partition: 0, Offset: 50
+2025-11-15 14:04:24,980 - INFO - Sent VHM -> Topic: vietnam_stocks, Partition: 0, Offset: 51
+2025-11-15 14:04:24,984 - INFO - Sent VIC -> Topic: vietnam_stocks, Partition: 0, Offset: 52
+2025-11-15 14:04:24,987 - INFO - Sent HPG -> Topic: vietnam_stocks, Partition: 0, Offset: 53
+2025-11-15 14:04:24,991 - INFO - Sent TCB -> Topic: vietnam_stocks, Partition: 0, Offset: 54
+2025-11-15 14:04:24,995 - INFO - Sent ACB -> Topic: vietnam_stocks, Partition: 0, Offset: 55
+2025-11-15 14:04:24,998 - INFO - Sent VNM -> Topic: vietnam_stocks, Partition: 0, Offset: 56
+2025-11-15 14:04:25,002 - INFO - Sent BID -> Topic: vietnam_stocks, Partition: 0, Offset: 57
+2025-11-15 14:04:25,005 - INFO - Sent GAS -> Topic: vietnam_stocks, Partition: 0, Offset: 58
+2025-11-15 14:04:25,009 - INFO - Sent MSN -> Topic: vietnam_stocks, Partition: 0, Offset: 59
+2025-11-15 14:04:25,009 - INFO - Chờ 14.79s trước khi lấy dữ liệu tiếp...

@@ -2,3 +2,7 @@ pyspark==3.3
 dash
 plotly
 kafka-python
+vnstock
+redis
+pandas
+numpy
