@@ -1,58 +1,0 @@
-2025-11-15 14:03:40,187 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connecting> [IPv4 ('172.18.0.9', 9092)]>: connecting to kafka:9092 [('172.18.0.9', 9092) IPv4]
-2025-11-15 14:03:40,192 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <checking_api_versions_recv> [IPv4 ('172.18.0.9', 9092)]>: Broker version identified as 2.6
-2025-11-15 14:03:40,192 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Connection complete.
-Setting default log level to "WARN".
-To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
-25/11/15 14:03:42 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
-2025-11-15 14:03:44,685 - INFO - Kafka Producer initialized. Topic: fraud_transactions
-2025-11-15 14:03:44,685 - INFO - HDFS Path: hdfs://namenode:9000/data/input/paysim_realtime.csv
-2025-11-15 14:03:44,685 - INFO - ================================================================================
-2025-11-15 14:03:44,686 - INFO - FRAUD DETECTION REAL-TIME PRODUCER
-2025-11-15 14:03:44,686 - INFO - ================================================================================
-2025-11-15 14:03:44,688 - INFO - Đang đọc dữ liệu từ HDFS: hdfs://namenode:9000/data/input/paysim_realtime.csv
-[Stage 1:>                                                          (0 + 6) / 6][Stage 1:=========>                                                 (1 + 5) / 6][Stage 1:===================>                                       (2 + 4) / 6]                                                                                [Stage 2:>                                                          (0 + 6) / 6]                                                                                2025-11-15 14:03:56,609 - INFO - Đã đọc 636,262 giao dịch từ HDFS
-2025-11-15 14:03:56,609 - WARNING - File có 636,262 records, sẽ lấy 100,000 records đầu
-2025-11-15 14:03:57,561 - INFO - NumExpr defaulting to 6 threads.
-[Stage 5:>                                                          (0 + 1) / 1]                                                                                2025-11-15 14:04:00,060 - INFO - Đã chuyển 100,000 giao dịch sang Pandas
-2025-11-15 14:04:00,061 - INFO - Tốc độ: 5 giao dịch/giây
-2025-11-15 14:04:00,062 - INFO - Tổng số giao dịch: 100,000
-2025-11-15 14:04:00,062 - INFO - Thời gian ước tính: 20000.0 giây
-2025-11-15 14:04:00,062 - INFO - ================================================================================
-2025-11-15 14:04:00,063 - INFO - Bắt đầu gửi dữ liệu... (Ctrl+C để dừng)
-2025-11-15 14:04:00,063 - INFO - ================================================================================
-2025-11-15 14:04:00,065 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=kafka:9092 <connecting> [IPv4 ('172.18.0.9', 9092)]>: connecting to kafka:9092 [('172.18.0.9', 9092) IPv4]
-2025-11-15 14:04:00,066 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Connection complete.
-2025-11-15 14:04:00,066 - INFO - <BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=kafka:9092 <connected> [IPv4 ('172.18.0.9', 9092)]>: Closing connection. 
-2025-11-15 14:04:00,074 - INFO - Sent TX #0 -> Partition: 0, Offset: 25
-2025-11-15 14:04:00,091 - INFO - Progress: 5/100,000 (0.0%) - Sent: 5 - Batch time: 0.028s
-2025-11-15 14:04:01,086 - INFO - Progress: 10/100,000 (0.0%) - Sent: 10 - Batch time: 0.020s
-2025-11-15 14:04:02,087 - INFO - Progress: 15/100,000 (0.0%) - Sent: 15 - Batch time: 0.020s
-2025-11-15 14:04:03,088 - INFO - Progress: 20/100,000 (0.0%) - Sent: 20 - Batch time: 0.020s
-2025-11-15 14:04:04,088 - INFO - Progress: 25/100,000 (0.0%) - Sent: 25 - Batch time: 0.019s
-2025-11-15 14:04:05,091 - INFO - Progress: 30/100,000 (0.0%) - Sent: 30 - Batch time: 0.019s
-2025-11-15 14:04:06,095 - INFO - Progress: 35/100,000 (0.0%) - Sent: 35 - Batch time: 0.023s
-2025-11-15 14:04:07,089 - INFO - Progress: 40/100,000 (0.0%) - Sent: 40 - Batch time: 0.016s
-2025-11-15 14:04:08,091 - INFO - Progress: 45/100,000 (0.0%) - Sent: 45 - Batch time: 0.016s
-2025-11-15 14:04:09,091 - INFO - Progress: 50/100,000 (0.1%) - Sent: 50 - Batch time: 0.015s
-2025-11-15 14:04:10,097 - INFO - Progress: 55/100,000 (0.1%) - Sent: 55 - Batch time: 0.019s
-2025-11-15 14:04:11,097 - INFO - Progress: 60/100,000 (0.1%) - Sent: 60 - Batch time: 0.017s
-2025-11-15 14:04:12,095 - INFO - Progress: 65/100,000 (0.1%) - Sent: 65 - Batch time: 0.016s
-2025-11-15 14:04:13,097 - INFO - Progress: 70/100,000 (0.1%) - Sent: 70 - Batch time: 0.015s
-2025-11-15 14:04:14,102 - INFO - Progress: 75/100,000 (0.1%) - Sent: 75 - Batch time: 0.019s
-2025-11-15 14:04:15,099 - INFO - Progress: 80/100,000 (0.1%) - Sent: 80 - Batch time: 0.015s
-2025-11-15 14:04:16,101 - INFO - Progress: 85/100,000 (0.1%) - Sent: 85 - Batch time: 0.015s
-2025-11-15 14:04:17,101 - INFO - Progress: 90/100,000 (0.1%) - Sent: 90 - Batch time: 0.014s
-2025-11-15 14:04:18,103 - INFO - Progress: 95/100,000 (0.1%) - Sent: 95 - Batch time: 0.015s
-2025-11-15 14:04:19,105 - INFO - Progress: 100/100,000 (0.1%) - Sent: 100 - Batch time: 0.014s
-2025-11-15 14:04:20,095 - INFO - Sent TX #100 -> Partition: 0, Offset: 125
-2025-11-15 14:04:20,108 - INFO - Progress: 105/100,000 (0.1%) - Sent: 105 - Batch time: 0.016s
-2025-11-15 14:04:21,109 - INFO - Progress: 110/100,000 (0.1%) - Sent: 110 - Batch time: 0.016s
-2025-11-15 14:04:22,110 - INFO - Progress: 115/100,000 (0.1%) - Sent: 115 - Batch time: 0.016s
-2025-11-15 14:04:23,111 - INFO - Progress: 120/100,000 (0.1%) - Sent: 120 - Batch time: 0.022s
-2025-11-15 14:04:24,111 - INFO - Progress: 125/100,000 (0.1%) - Sent: 125 - Batch time: 0.021s
-2025-11-15 14:04:25,112 - INFO - Progress: 130/100,000 (0.1%) - Sent: 130 - Batch time: 0.020s
-2025-11-15 14:04:26,112 - INFO - Progress: 135/100,000 (0.1%) - Sent: 135 - Batch time: 0.018s
-2025-11-15 14:04:27,115 - INFO - Progress: 140/100,000 (0.1%) - Sent: 140 - Batch time: 0.021s
-2025-11-15 14:04:28,113 - INFO - Progress: 145/100,000 (0.1%) - Sent: 145 - Batch time: 0.016s
-2025-11-15 14:04:29,112 - INFO - Progress: 150/100,000 (0.1%) - Sent: 150 - Batch time: 0.014s
-2025-11-15 14:04:30,116 - INFO - Progress: 155/100,000 (0.2%) - Sent: 155 - Batch time: 0.016s

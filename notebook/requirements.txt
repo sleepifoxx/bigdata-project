@@ -6,3 +6,4 @@ vnstock
 redis
 pandas
 numpy
+streamlit

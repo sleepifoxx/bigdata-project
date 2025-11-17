@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
 KAFKA_TOPIC = 'fraud_transactions'
 HDFS_INPUT_PATH = 'hdfs://namenode:9000/data/input/paysim_realtime.csv'
-TRANSACTIONS_PER_SECOND = 1
+TRANSACTIONS_PER_BATCH = 100
 BATCH_INTERVAL = 10.0  # giây
+TRANSACTIONS_PER_SECOND = 10  # Speed within each batch
 
 
 class FraudDataProducer:
@@ -129,39 +130,48 @@ class FraudDataProducer:
             logger.error(f"Lỗi khi gửi transaction #{index}: {str(e)}")
             return False
     
-    def run(self, transactions_per_second=5):
-        """Chạy producer với tốc độ cho trước"""
+    def run(self, transactions_per_batch=100, batch_interval=10.0):
+        """Chạy producer với batch processing"""
         logger.info("="*80)
-        logger.info("FRAUD DETECTION REAL-TIME PRODUCER")
+        logger.info("FRAUD DETECTION BATCH PRODUCER")
         logger.info("="*80)
         
         # Load dữ liệu
         df = self.load_data()
         total_transactions = len(df)
         
-        logger.info(f"Tốc độ: {transactions_per_second} giao dịch/giây")
+        logger.info(f"Batch size: {transactions_per_batch} giao dịch/batch")
+        logger.info(f"Batch interval: {batch_interval} giây")
         logger.info(f"Tổng số giao dịch: {total_transactions:,}")
-        logger.info(f"Thời gian ước tính: {total_transactions/transactions_per_second:.1f} giây")
+        logger.info(f"Số batch ước tính: {total_transactions//transactions_per_batch + 1}")
         logger.info("="*80)
-        logger.info("Bắt đầu gửi dữ liệu... (Ctrl+C để dừng)")
+        logger.info("Bắt đầu gửi batch... (Ctrl+C để dừng)")
         logger.info("="*80)
         
         try:
             sent_count = 0
-            batch_size = transactions_per_second
-            batch_interval = 1.0  # 1 giây
+            batch_count = 0
             
-            for i in range(0, total_transactions, batch_size):
+            for i in range(0, total_transactions, transactions_per_batch):
                 batch_start = time.time()
+                batch_count += 1
                 
                 # Lấy batch giao dịch
-                batch_end = min(i + batch_size, total_transactions)
+                batch_end = min(i + transactions_per_batch, total_transactions)
                 batch = df.iloc[i:batch_end]
+                current_batch_size = len(batch)
                 
-                # Gửi từng giao dịch trong batch
+                logger.info(f"🚀 Sending Batch #{batch_count} ({current_batch_size} transactions)...")
+                
+                # Gửi từng giao dịch trong batch nhanh chóng
+                batch_sent = 0
                 for idx, row in batch.iterrows():
                     if self.send_transaction(row, idx):
                         sent_count += 1
+                        batch_sent += 1
+                
+                # Flush sau mỗi batch
+                self.producer.flush()
                 
                 # Tính thời gian đã xử lý
                 elapsed = time.time() - batch_start
@@ -169,19 +179,17 @@ class FraudDataProducer:
                 # Hiển thị progress
                 progress = (batch_end / total_transactions) * 100
                 logger.info(
-                    f"Progress: {batch_end:,}/{total_transactions:,} ({progress:.1f}%) - "
-                    f"Sent: {sent_count:,} - "
+                    f"✅ Batch #{batch_count} completed: {batch_sent}/{current_batch_size} sent - "
+                    f"Total: {sent_count:,}/{total_transactions:,} ({progress:.1f}%) - "
                     f"Batch time: {elapsed:.3f}s"
                 )
                 
-                # Sleep để đạt tốc độ mong muốn
-                sleep_time = max(0, batch_interval - elapsed)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                
-                # Flush producer định kỳ
-                if sent_count % 100 == 0:
-                    self.producer.flush()
+                # Sleep để đạt interval mong muốn (trừ đi thời gian xử lý)
+                if i + transactions_per_batch < total_transactions:  # Không sleep ở batch cuối
+                    sleep_time = max(0, batch_interval - elapsed)
+                    if sleep_time > 0:
+                        logger.info(f"⏳ Waiting {sleep_time:.1f}s for next batch...")
+                        time.sleep(sleep_time)
             
             # Flush cuối cùng
             self.producer.flush()
@@ -220,7 +228,7 @@ def main():
         hdfs_path=HDFS_INPUT_PATH
     )
     
-    producer.run(transactions_per_second=TRANSACTIONS_PER_SECOND)
+    producer.run(transactions_per_batch=TRANSACTIONS_PER_BATCH, batch_interval=BATCH_INTERVAL)
 
 
 if __name__ == "__main__":

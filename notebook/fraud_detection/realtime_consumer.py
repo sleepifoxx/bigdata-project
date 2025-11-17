@@ -336,7 +336,11 @@ def main():
                 redis_client.zadd('fraud:transactions:recent', {tx_key: ts})
                 redis_client.zremrangebyrank('fraud:transactions:recent', 0, -201)  # Keep 200
                 
-                # If fraud detected, create alert
+                # Increment total transaction counter for all transactions
+                redis_client.incr('fraud:counter:total')
+                redis_client.incr(f'fraud:counter:type:{tx_data["tx_type"]}')
+                
+                # If fraud detected, create alert and increment fraud counter
                 if tx_data['predicted_fraud'] == 1:
                     alert_key = f"fraud:alert:{tx_data['tx_id']}:{ts}"
                     alert = {
@@ -353,9 +357,9 @@ def main():
                     redis_client.zadd('fraud:alerts:recent', {alert_key: ts})
                     redis_client.zremrangebyrank('fraud:alerts:recent', 0, -101)  # Keep 100
                     
-                    # Increment counters
-                    redis_client.incr('fraud:counter:total')
-                    redis_client.incr(f'fraud:counter:type:{tx_data["tx_type"]}')
+                    # Increment fraud-specific counters
+                    redis_client.incr('fraud:counter:total_fraud')
+                    redis_client.incr(f'fraud:counter:fraud_type:{tx_data["tx_type"]}')
                 
                 print(f"✓ Redis TX: {tx_data['tx_id']} | {tx_data['tx_type']} | ${tx_data['amount']:.2f} | Fraud: {tx_data['predicted_fraud']} ({tx_data['fraud_prob_pct']:.1f}%)")
                 
