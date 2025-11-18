@@ -114,7 +114,28 @@ services:
     volumes:
       - ./notebook/:/home/jovyan/work/
     depends_on:
+      - namenode
+      - datanode1
+      - datanode2
+      - resourcemanager
+      - historyserver
+      - nodemanager1
       - spark-master
+      - spark-worker
+      - kafka
+      - zookeeper
+      - redis
+    command: >
+      bash -c "
+        cd /home/jovyan/work &&
+        chmod +x data/get_data.sh &&
+        chmod +x run_all.sh &&
+        ./data/get_data.sh &&
+        pip install -r requirements.txt &&
+        python upload_to_hdfs.py &&
+        ./run_all.sh &&
+        start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''
+      "
 
   # ================== Spark Cluster ==================
   spark-master:

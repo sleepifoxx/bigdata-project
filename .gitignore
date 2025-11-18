@@ -1,1 +1,4 @@
-data/
+notebook/data/*.csv
+notebook/data/*.zip
+notebook/logs/
+**/desktop.ini
